@@ -1,7 +1,10 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
 from typing import Optional
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from omml_converter import OmmlConversionError, convert_omml_to_latex
 
 app = FastAPI(
     title="OMML to LaTeX Microservice",
@@ -31,22 +34,6 @@ class LatexResponse(BaseModel):
     error: Optional[str] = None
 
 
-def convert_omml_to_latex_dummy(omml_xml: str) -> str:
-    """
-    TEMP PLACEHOLDER:
-    Right now this just wraps the OMML in $$ ... $$ so you can
-    test the full pipeline wiring.
-
-    Later you will replace this with REAL OMML → LaTeX logic using:
-      - Pandoc, or
-      - omml2mathml + mathml2latex, or
-      - any other Python OMML converter.
-    """
-    # TODO: Replace with real conversion
-    safe_preview = omml_xml.strip().replace("\n", " ")[:120]
-    return f"$$\\text{{OMML snippet: {safe_preview} ...}}$$"
-
-
 @app.post("/omml-to-latex", response_model=LatexResponse)
 async def omml_to_latex_endpoint(payload: OmmlRequest):
     """
@@ -64,10 +51,16 @@ async def omml_to_latex_endpoint(payload: OmmlRequest):
                 error="Empty OMML content",
             )
 
-        latex = convert_omml_to_latex_dummy(payload.omml)
+        latex = convert_omml_to_latex(payload.omml)
         return LatexResponse(latex=latex, success=True)
 
-    except Exception as e:
+    except OmmlConversionError as exc:
+        return LatexResponse(
+            latex="",
+            success=False,
+            error=str(exc),
+        )
+    except Exception as e:  # pragma: no cover
         return LatexResponse(
             latex="",
             success=False,
